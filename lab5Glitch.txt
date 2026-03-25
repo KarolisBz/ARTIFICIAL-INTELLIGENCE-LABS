@@ -1,0 +1,80 @@
+dapping_engine = fl.Engine(
+    name="Dapping",
+    input_variables=[
+        fl.InputVariable(
+            name="wind", minimum=0.0, maximum=12.0,
+            terms=[
+                fl.Trapezoid("calm", 0, 0, 2, 5),
+                fl.Triangle("fresh", 2, 6, 10),
+                fl.Trapezoid("stormy", 6, 10, 12, 12),
+            ]
+        ),
+        fl.InputVariable(
+            name="temperature", minimum=0.0, maximum=30.0,
+            terms=[
+                # TODO: Define "Low" set (1/0, 1/0 ,1/5 , 0/15)
+                fl.Trapezoid("low", 0, 0, 5, 15),
+                
+                # TODO: Define "average" set (0/5, 1/15, 0/25)
+                fl.Triangle("average", 5, 15, 25),
+                
+                # TODO: Define "high" set (0/18 ,1/24, 1/30, 1/30)
+                fl.Trapezoid("high", 18, 24, 30, 30)
+            ]
+        ),
+    ],
+    output_variables=[
+        fl.OutputVariable(
+            name="dapping", minimum=0.0, maximum=100.0,
+            aggregation=fl.Maximum(),
+            defuzzifier=fl.Centroid(500),
+            terms=[
+                fl.Trapezoid("poor", 0, 0, 10, 30),
+                fl.Triangle("mediocre", 20, 50, 80),
+                fl.Trapezoid("excellent", 70, 90, 100, 100),
+            ]
+        ),
+    ],
+    rule_blocks=[
+        fl.RuleBlock(
+            name="rules",
+            conjunction=fl.Minimum(),
+            disjunction=fl.Maximum(),
+            implication=fl.Minimum(),
+            activation=fl.General(),
+            rules=[
+                fl.Rule.create(
+                    "if wind is extremely stormy or temperature is very low "
+                    "then dapping is not very poor"
+                ),
+                fl.Rule.create(
+                    "if wind is fresh and temperature is more_or_less average "
+                    "then dapping is mediocre"
+                ),
+                fl.Rule.create(
+                    "if wind is slightly stormy and temperature is not low "
+                    "then dapping is a_little excellent"
+                ),
+            ]
+        ),
+    ]
+)
+
+# Run with some crisp inputs
+dapping_engine.input_variable("wind").value = 8.0
+dapping_engine.input_variable("temperature").value = 10.0
+dapping_engine.process()
+
+mamdani_cog = dapping_engine.output_variable("dapping").value.item()
+print(f"Dapping Mamdani COG (wind=8, temp=10): {mamdani_cog:.2f}%")
+
+print()
+print("All Mamdani defuzzifiers:")
+for name, defuzz in [
+    ("COG", fl.Centroid(500)), ("MOM", fl.MeanOfMaximum(500)),
+    ("SOM", fl.SmallestOfMaximum(500)), ("LOM", fl.LargestOfMaximum(500))
+]:
+    dapping_engine.output_variable("dapping").defuzzifier = defuzz
+    dapping_engine.process()
+    val = dapping_engine.output_variable("dapping").value.item()
+    print(f"  {name}: {val:.2f}%")
